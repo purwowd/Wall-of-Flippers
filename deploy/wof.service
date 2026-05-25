@@ -1,0 +1,15 @@
+[Unit]
+Description=Wall of Flippers BLE monitor
+After=network.target bluetooth.service
+Wants=bluetooth.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/Wall-of-Flippers
+ExecStart=/opt/Wall-of-Flippers/.venv/bin/python3 /opt/Wall-of-Flippers/WallofFlippers.py -w --no-clear --json-lines
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

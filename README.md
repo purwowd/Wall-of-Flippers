@@ -310,16 +310,44 @@ https://stackoverflow.com/questions/23708898/pip-is-not-recognized-as-an-interna
 </details>
 
 # Headless Usage <a name = "headless_usage"></a>
-> Wall of Flippers now supports the use of a command only interface. Thanks to @cyberartemio for the recommendation. The commands below can be used to automate the use the Wall of Flippers. Whether that be for systemd or just basic general automation. (If you are running/using a virtual environment, make sure to source to be able to use WallofFlippers.py)
+> Wall of Flippers supports a command-only interface for automation and systemd. See also [docs/MACOS.md](docs/MACOS.md) for Apple Silicon / Intel Mac setup.
 
-	usage: WalloFlippers.py [-h] [-w] [i] [-d DEVICE]
-	options:
-	-h, --help					Help Message
-	-w, --wall 					Wall of Flippers
-	-i, --install				Install Dependencies
-	-b, --badgemode				Toggle Badge Mode
-	-a, --advertise				Advertise WoF Exsistance (OFF=Default)
-	-d DEVICE, --device DEVICE	A bluetooth device (External/Internal)
+```text
+usage: WallofFlippers.py [-h] [-w] [-i] [-d DEVICE] [-b] [-a] [-c PATH]
+       [--scan-interval SEC] [--loop-sleep SEC] [--no-clear] [--quiet]
+       [--json-lines] [--export PATH] [--anonymize-mac]
+
+  -w, --wall              Wall of Flippers scan loop
+  -i, --install           Install dependencies
+  -d, --device            Bluetooth adapter (Linux: hci0 or index)
+  -b, --badgemode         Toggle badge mode
+  -a, --advertise         Advertise WoF (Linux only)
+  -c, --config PATH       JSON config (see config/wof.defaults.json)
+  --scan-interval SEC     BLE scan duration per cycle
+  --json-lines            Machine-readable events on stdout
+  --export PATH           Write dashboard snapshot JSON each refresh
+```
+
+Example (Raspberry Pi / Linux):
+
+```bash
+sudo .venv/bin/python3 WallofFlippers.py -w -d 0 --no-clear
+```
+
+Example (macOS):
+
+```bash
+python3 WallofFlippers.py -w --json-lines
+```
+
+### Web dashboard (FastAPI + Tailwind)
+
+```bash
+pip install fastapi uvicorn jinja2
+python3 run_web.py
+# Browser: http://127.0.0.1:8787
+python3 WallofFlippers.py --web --web-host 0.0.0.0 --web-port 8787
+```
 
 # Issues and Fixes <a name = "doc_issues_and_fixes"></a>
 > If you encounter any issues or bugs, please report them to us on our github page. We will try our best to fix them as soon as possible. If you would like to contribute to the project, please feel free to make a pull request. We will review it and merge it if it is a good addition to the project. We will be starting a discord server soon for support and development. Please keep an eye out for that. Thank you for your support and we hope you enjoy this project! <3

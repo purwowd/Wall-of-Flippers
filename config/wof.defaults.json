@@ -1,0 +1,16 @@
+{
+  "scan_interval_seconds": 5,
+  "loop_sleep_seconds": 0.5,
+  "archive_flush_interval_seconds": 30,
+  "max_session_flippers": 200,
+  "max_flippers_ratelimited": 3,
+  "ratelimit_seconds": 5,
+  "ble_threshold": 25,
+  "max_online": 15,
+  "max_offline": 15,
+  "anonymize_mac": false,
+  "flipper_volume_price": 169,
+  "max_ble_devices_display": 30,
+  "rssi_history_max_points": 40,
+  "rssi_history_max_devices": 50
+}

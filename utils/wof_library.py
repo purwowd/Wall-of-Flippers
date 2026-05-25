@@ -31,46 +31,36 @@ import json
 
 
 # Wall of Flippers "library" for important functions and classes :3
-import utils.wof_cache as cache # for important configurations and data :3
+import utils.wof_cache as cache
+import utils.wof_platform as platform
+import utils.wof_storage as storage
+import utils.wof_trust as trust
+import utils.wof_events as events
 
 
-def log(s_table:dict): # Logs data to the log file (utils/wof_log.txt)
-    """logs data to the log file (utils/wof_log.txt)"""
-    with open('db/Flipper.json', 'r', encoding='utf-8') as flipper_file: # Load flipper data from Flipper.json with UTF-8 encoding
-        flipper_data = json.load(flipper_file)
-    for s_flipper in flipper_data:
-        if s_flipper["MAC"] == s_table["MAC"] and s_flipper["Name"] == s_table["Name"]:
-            s_flipper.update({ # Update the flipper data
-                'RSSI': str(s_table['RSSI']),
-                'Detection Type': s_table['Detection Type'],
-                'unixLastSeen': s_table['unixLastSeen'],
-                'Name': s_table['Name'],
-                'Type': s_table['Type'],
-            })
-            break
-    else:
-        flipper_data.append({ # Add the flipper data
-            "Name": s_table['Name'],
-            "RSSI": s_table['RSSI'],
-            "MAC": s_table['MAC'],
-            "Detection Type": s_table['Detection Type'],
-            "unixLastSeen": s_table['unixLastSeen'],
-            "unixFirstSeen": s_table['unixFirstSeen'],
-            "Type": s_table['Type'],
-            "UID": s_table['UID'],
-        })
-    with open('db/Flipper.json', 'w', encoding='utf-8') as flipper_file: # Save the flipper data to Flipper.json
-        json.dump(flipper_data, flipper_file, indent=4)   
+def log(s_table):
+    """Backward-compatible alias for persist_flipper."""
+    persist_flipper(s_table)
+
+
+def persist_flipper(s_table):
+    interval = cache.wof_data.get("archive_flush_interval_seconds", 30)
+    return storage.persist_flipper(s_table, flush_interval=interval)
+
+
+def format_mac(mac):
+    if not mac or not cache.wof_data.get("anonymize_mac"):
+        return mac
+    parts = mac.split(":")
+    if len(parts) >= 3:
+        return ":".join(parts[:3]) + ":xx:xx:xx"
+    return mac
+
 
 def required2files():
-    """Checks for the required files which are Flipper.json and Backup.json, some really poor implementation but it works."""
-    if not os.path.isdir("db"): os.mkdir("db")
-    if not os.path.isfile("db/Flipper.json"):
-        with open("db/Flipper.json", "w") as new_file:
-            json.dump([], new_file)
-    if not os.path.isfile("db/Backup.json"):
-        with open("db/Backup.json", "w") as new_file:
-            json.dump([], new_file)  
+    storage.ensure_db()
+    storage.load_archive()
+    cache.wof_data["base_flippers"] = list(storage.get_archive())
     
 
 def unix2text(unix_timestamp:int):
@@ -97,7 +87,6 @@ def ble2Sort(packets:list): # Sorts BLE packets and updates the list/cache
     suspiciousFlippers = []
     forbidden_packets_list = cache.wof_data['forbidden_packets']
     wof_advertiserRaw = cache.wof_data['wof_advertiserRaw']
-    totalFlippersFound = (advertisement[0]["flipper"] for advertisement in packets)
     totalNewFound = 0
     totalNewFound = sum(1 for advertisement in packets if advertisement[0]["flipper"] and not any(flipper['MAC'] == advertisement[0]["address"] for flipper in cache.wof_data['base_flippers']))
     totalNewFoundArray = [advertisement[0] for advertisement in packets if advertisement[0]["flipper"] and not any(flipper['MAC'] == advertisement[0]["address"] for flipper in cache.wof_data['base_flippers'])]
@@ -105,6 +94,9 @@ def ble2Sort(packets:list): # Sorts BLE packets and updates the list/cache
     if (totalNewFound >= cache.wof_data['max_flippers_ratelimited'] and not cache.wof_data['is_ratelimited']):
         cache.wof_data['is_ratelimited'] = True 
         cache.wof_data['last_ratelimit'] = int(time.time()) + cache.wof_data['ratelimit_seconds']
+
+    seen_ble_macs = set()
+    cache.wof_data['scan_ble_devices'] = []
     for advertisement in packets:
         advertisement = advertisement[0]
         adv_name = advertisement["name"]
@@ -115,133 +107,315 @@ def ble2Sort(packets:list): # Sorts BLE packets and updates the list/cache
         adv_uid = advertisement["uid"]
         adv_isFlipper = advertisement["flipper"]
         adv_detection = advertisement["detection"]
-        adv_blacklisted = None
-        if adv_address in suspiciousFlippers and cache.wof_data['is_ratelimited']: adv_isFlipper = False # If the flipper is in the suspicious list, mark it down as not a flipper
+        adv_trust = advertisement.get("trust", "—")
+        if adv_address in suspiciousFlippers and cache.wof_data['is_ratelimited']:
+            adv_isFlipper = False
+        if adv_address and adv_address not in seen_ble_macs:
+            seen_ble_macs.add(adv_address)
+            if adv_name and adv_name != "UNK":
+                display_name = adv_name
+            else:
+                short_mac = adv_address.replace(":", "")[-6:]
+                display_name = f"BLE ···{short_mac}"
+            cache.wof_data['scan_ble_devices'].append({
+                "name": display_name,
+                "mac": adv_address,
+                "rssi": adv_rssi,
+                "is_flipper": adv_isFlipper,
+                "role": "Flipper" if adv_isFlipper else "BLE",
+                "trust": adv_trust,
+            })
         for packet in adv_packets:
             for forbidden_packet in forbidden_packets_list:
                 if all(p1 == p2 or p2 == "_" for p1, p2 in zip(packet, forbidden_packet['PCK'])):
                     int_get_non_underscore = len(forbidden_packet['PCK'].replace("_", ""))
                     int_total_found = sum(p != "_" for p in packet)
                     if int_total_found >= int_get_non_underscore:
-                        cache.wof_data['forbidden_packets_found'].append({"Type": forbidden_packet['TYPE'],"PCK": packet,"MAC": adv_address, "RSSI": adv_rssi})
-                if len(packet) > cache.wof_data['min_byte_length']: # If the packet is longer than the minimum byte length, then it is a valid packet we want to log
-                    cache.wof_data['all_packets_found'].append({"PCK": packet,"MAC": adv_address})
+                        cache.wof_data['forbidden_packets_found'].append(
+                            {"Type": forbidden_packet['TYPE'], "PCK": packet, "MAC": adv_address, "RSSI": adv_rssi}
+                        )
+            if len(packet) > cache.wof_data['min_byte_length']:
+                cache.wof_data['all_packets_found'].append({"PCK": packet, "MAC": adv_address})
             if str(packet).startswith(wof_advertiserRaw):
-                decodedAdvertiser = bytes.fromhex(packet.replace(wof_advertiserRaw, "")).decode('utf-8').replace("\x00", "")
-                cache.wof_data['nearbyWof'].append(decodedAdvertiser)
-        if adv_isFlipper: # if flipper is set to true :3
+                try:
+                    decodedAdvertiser = bytes.fromhex(
+                        packet.replace(wof_advertiserRaw, "")
+                    ).decode("utf-8", errors="ignore").replace("\x00", "")
+                    if decodedAdvertiser and decodedAdvertiser not in cache.wof_data['nearbyWof']:
+                        cache.wof_data['nearbyWof'].append(decodedAdvertiser)
+                except (ValueError, UnicodeDecodeError):
+                    pass
+        if adv_isFlipper:
             int_recorded = int(time.time())
-            cache.wof_data['found_flippers'] = [flipper for flipper in cache.wof_data['found_flippers'] if adv_address != flipper['MAC']] 
-            t_data = {"Name": adv_name,"RSSI": adv_rssi,"MAC": adv_address,"Detection Type": adv_detection,"unixLastSeen": int_recorded,"unixFirstSeen": int_recorded,"Type": adv_type,"UID": adv_uid}
-            if not any(flipper['MAC'] == adv_address and flipper['Name'] == adv_name for flipper in cache.wof_data['found_flippers']): # if the flipper is not in the list, add it
+            existing = storage.find_existing(adv_address, adv_name)
+            first_seen = existing["unixFirstSeen"] if existing else int_recorded
+            trust_label = trust.trust_score(adv_name, adv_address, adv_uid, adv_detection, adv_type)
+            t_data = {
+                "Name": adv_name,
+                "RSSI": adv_rssi,
+                "MAC": adv_address,
+                "Detection Type": adv_detection,
+                "unixLastSeen": int_recorded,
+                "unixFirstSeen": first_seen,
+                "Type": adv_type,
+                "UID": adv_uid,
+                "Trust": trust_label,
+            }
+            mac_key = adv_address.lower()
+            is_new_session = True
+            for flipper in cache.wof_data['found_flippers']:
+                if flipper['MAC'].lower() == mac_key:
+                    flipper.update({
+                        "RSSI": adv_rssi,
+                        "unixLastSeen": int_recorded,
+                        "Trust": trust_label,
+                    })
+                    if adv_name and adv_name != "UNK" and flipper.get("Name") in (None, "", "UNK"):
+                        flipper["Name"] = adv_name
+                        t_data["Name"] = adv_name
+                    is_new_session = False
+                    break
+            if is_new_session:
                 cache.wof_data['found_flippers'].append(t_data)
-                cache.wof_data['live_flippers'].append(t_data)
-                log(t_data)
-                any_flippers_discovered = True
-                flippers_discovered_list.append(t_data)
-                latest_discovered_list = t_data
+                max_session = cache.wof_data.get("max_session_flippers", 200)
+                if len(cache.wof_data['found_flippers']) > max_session:
+                    cache.wof_data['found_flippers'] = cache.wof_data['found_flippers'][-max_session:]
+                is_new = persist_flipper(t_data)
+                cache.wof_data['base_flippers'] = list(storage.get_archive())
+                events.emit("flipper_seen", {
+                    "mac": format_mac(adv_address),
+                    "name": adv_name if adv_name and adv_name != "UNK" else t_data.get("Name", "?"),
+                    "trust": trust_label,
+                    "new": is_new,
+                })
+            cache.wof_data['live_flippers'].append(t_data)
+            any_flippers_discovered = True
+            flippers_discovered_list.append(t_data)
+            latest_discovered_list = t_data
     if (cache.wof_data['last_ratelimit'] < int(time.time())) and cache.wof_data['is_ratelimited']:
         cache.wof_data['is_ratelimited'] = False
     return any_flippers_discovered, flippers_discovered_list, latest_discovered_list, totalNewFound, cache.wof_data['is_ratelimited']
 
-def flipper2Validation(data:list, os:str): # Validates incoming flippers/ble packets
-    device_packets = []
-    device_information = []
-    device_name = "UNK"
-    device_manufacturer = "UNK"
-    device_uid = "UNK"
-    device_color = "UNK"
-    device_formatted = []
-    device_mac = "UNK"
-    device_rssi = data.rssi
-    isFlipper = False
-    keyFound = False
-    detectionType = "Unknown"
-    if os == "nt":
-        device_mac = str(data.address.lower())
-        device_name = str(data.name)
-        advertisement_uid = str(data.metadata.get('uids')).replace("['", "").replace("']", "")
-        for key, value in cache.wof_data['flipper_types'].items():
-            if key in advertisement_uid:
-                device_uid = advertisement_uid
-                device_color = value
-                device_packets = ["06", device_name, device_uid, "00"]
-                keyFound = True
-        if not keyFound:
-            if advertisement_uid.startswith("0000308") and advertisement_uid.endswith("0000-1000-8000-00805f9b34fb"):
-                device_uid = advertisement_uid
-                device_color = "SPF"
-                device_packets = ["06", device_name, device_uid, "00"]
-    if os == "posix":
-        device_mac = data.addr.lower()
-        scan_list = data.getScanData()
-        for scan_list_item in scan_list: 
-            device_formatted.append({"ADTYPE": scan_list_item[0], "Description": scan_list_item[1], "Value": scan_list_item[2]})
-        for i_data in device_formatted:
-            if i_data['Description'] == "Complete Local Name":
-                device_name = i_data['Value']
-            if i_data['Description'] == "Manufacturer":
-                device_manufacturer = i_data['Value']
-            for key, value in cache.wof_data['flipper_types'].items():
-                if i_data['Value'] == key:
-                    device_uid = i_data['Value']
-                    device_color = value
-                    keyFound = True
-            if not keyFound:
-                if i_data['Value'].startswith("0000308") and i_data['Value'].endswith("0000-1000-8000-00805f9b34fb"):
-                    device_uid = i_data['Value']
-                    device_color = "SPF"
-            device_packets.append(i_data['Value'])
-    if device_uid != "UNK" and len(device_packets) == 4:
-        if device_packets[0] == "06" and device_packets[1] == device_name and device_packets[2] == device_uid and device_packets[3] == "00":
-            if device_name.lower().startswith("flipper"):
-                isFlipper = True
-                detectionType = "Name"
-            elif device_mac.startswith(("80:e1:26", "80:e1:27", "0c:fa:22")): # FLIPPER DEVICES INC (https://maclookup.app/macaddress/0cfa22)
-                detectionType = "Address"
-                isFlipper = True
-            else:
-                detectionType = "Identifier"
-                isFlipper = True
-    device_information.append({
-        "name": device_name,
-        "address": device_mac,
+def _match_flipper_uid(value):
+    """Return (uid, color, matched_known_type)."""
+    if not value:
+        return "UNK", "UNK", False
+    normalized = value.lower()
+    for key, color in cache.wof_data['flipper_types'].items():
+        if key.lower() in normalized or normalized == key.lower():
+            return key, color, True
+    if normalized.startswith("0000308") and normalized.endswith("0000-1000-8000-00805f9b34fb"):
+        return value, "SPF", True
+    return "UNK", "UNK", False
+
+
+def _classify_flipper(device_name, device_mac, device_uid):
+    if device_uid == "UNK":
+        return False, "Unknown"
+    if device_name and device_name.lower().startswith("flipper"):
+        return True, "Name"
+    if device_mac and device_mac.startswith(platform.FLIPPER_MAC_PREFIXES):
+        return True, "Address"
+    return True, "Identifier"
+
+
+def _build_device_record(
+    device_name,
+    device_mac,
+    device_rssi,
+    device_packets,
+    device_uid,
+    device_manufacturer,
+    device_color,
+    device_formatted,
+    is_flipper,
+    detection_type,
+):
+    return [{
+        "name": device_name or "UNK",
+        "address": device_mac or "UNK",
         "rssi": device_rssi,
         "packets": device_packets,
         "uid": device_uid,
         "manufacturer": device_manufacturer,
         "color": device_color,
         "genericdata": device_formatted,
-        "detection": detectionType,
-        "flipper": isFlipper
-    })
-    return device_information
+        "detection": detection_type,
+        "flipper": is_flipper,
+    }]
 
-def adapter2Selection(deviceArgs:str=None):
-    ble_adapters = []
-    if cache.wof_data['system_type'] == "posix":
-        ble_adapters = [adapter for adapter in os.listdir('/sys/class/bluetooth/') if 'hci' in adapter]
-        # make a selection of the bluetooth adapter
-        if deviceArgs == None:
-            print("\n\n[#]\t[HCI DEVICE]\n" + "-" * shutil.get_terminal_size().columns)
-            for adapter in ble_adapters:
-                print(f"{ble_adapters.index(adapter)}".ljust(8) + f"{adapter}".ljust(34))
-            DEVIC_HCI = input("[?] Wall of Flippers >> ")
-        else:
-            DEVIC_HCI = deviceArgs
+
+def flipper2Validation_bleak(device, adv_data=None):
+    """Validate a Bleak device (macOS / Windows)."""
+    device_packets = []
+    device_formatted = []
+    device_name = device.name or "UNK"
+    device_manufacturer = "UNK"
+    device_uid = "UNK"
+    device_color = "UNK"
+    device_mac = str(device.address).lower()
+    device_rssi = getattr(device, "rssi", None) or -100
+
+    uids_blob = ""
+    if adv_data is not None:
+        if adv_data.local_name:
+            device_name = adv_data.local_name
+        if getattr(adv_data, "rssi", None) is not None:
+            device_rssi = adv_data.rssi
+        for uuid in adv_data.service_uuids or []:
+            uids_blob += uuid.lower()
+            device_packets.append(uuid.lower())
+            uid, color, matched = _match_flipper_uid(uuid)
+            if matched:
+                device_uid = uid
+                device_color = color
+        for company_id, mfg_bytes in (adv_data.manufacturer_data or {}).items():
+            hex_packet = f"{company_id:04x}{mfg_bytes.hex()}"
+            device_packets.append(hex_packet)
+            device_formatted.append({
+                "ADTYPE": "mfg",
+                "Description": "Manufacturer",
+                "Value": hex_packet,
+            })
+        for service_uuid, svc_bytes in (adv_data.service_data or {}).items():
+            hex_packet = f"{service_uuid.lower()}{svc_bytes.hex()}"
+            device_packets.append(hex_packet)
+            uid, color, matched = _match_flipper_uid(service_uuid)
+            if matched:
+                device_uid = uid
+                device_color = color
     else:
-        DEVIC_HCI = 0
-    if DEVIC_HCI == "": # If the user does not select a device, default to 0
-        DEVIC_HCI = 0
-    return DEVIC_HCI
+        metadata = device.metadata or {}
+        uids_blob = str(metadata.get("uuids", "")).replace("['", "").replace("']", "").lower()
+        for uuid in metadata.get("uuids") or []:
+            device_packets.append(str(uuid).lower())
+            uid, color, matched = _match_flipper_uid(str(uuid))
+            if matched:
+                device_uid = uid
+                device_color = color
+
+    if device_uid == "UNK" and uids_blob:
+        device_uid, device_color, _ = _match_flipper_uid(uids_blob)
+
+    is_flipper, detection_type = _classify_flipper(device_name, device_mac, device_uid)
+    trust_label = trust.trust_score(device_name, device_mac, device_uid, detection_type, device_color)
+    records = _build_device_record(
+        device_name,
+        device_mac,
+        device_rssi,
+        device_packets,
+        device_uid,
+        device_manufacturer,
+        device_color,
+        device_formatted,
+        is_flipper,
+        detection_type,
+    )
+    records[0]["trust"] = trust_label
+    return records
+
+
+def flipper2Validation(data, platform_kind):
+    """Validate a bluepy device (Linux)."""
+    device_packets = []
+    device_name = "UNK"
+    device_manufacturer = "UNK"
+    device_uid = "UNK"
+    device_color = "UNK"
+    device_formatted = []
+    device_mac = data.addr.lower()
+    device_rssi = data.rssi
+    is_flipper = False
+    detection_type = "Unknown"
+
+    scan_list = data.getScanData()
+    for scan_list_item in scan_list:
+        device_formatted.append({
+            "ADTYPE": scan_list_item[0],
+            "Description": scan_list_item[1],
+            "Value": scan_list_item[2],
+        })
+
+    for i_data in device_formatted:
+        value = i_data["Value"]
+        if i_data["Description"] == "Complete Local Name":
+            device_name = value
+        if i_data["Description"] == "Manufacturer":
+            device_manufacturer = value
+        uid, color, matched = _match_flipper_uid(value)
+        if matched:
+            device_uid = uid
+            device_color = color
+        device_packets.append(value)
+
+    is_flipper, detection_type = _classify_flipper(device_name, device_mac, device_uid)
+    records = _build_device_record(
+        device_name,
+        device_mac,
+        device_rssi,
+        device_packets,
+        device_uid,
+        device_manufacturer,
+        device_color,
+        device_formatted,
+        is_flipper,
+        detection_type,
+    )
+    records[0]["trust"] = trust.trust_score(device_name, device_mac, device_uid, detection_type, device_color)
+    return records
+
+
+def normalize_hci(device_arg):
+    """Map hci0 / 0 / empty to HCI index integer."""
+    if device_arg is None or device_arg == "":
+        return 0
+    value = str(device_arg).strip().lower()
+    if value.startswith("hci"):
+        return int(value[3:])
+    return int(value)
+
+
+def adapter2Selection(device_args=None):
+    if not platform.uses_bluepy(cache.wof_data.get("platform_kind")):
+        return 0
+
+    if not os.path.isdir("/sys/class/bluetooth"):
+        print("[!] Wall of Flippers >> No Bluetooth adapters found (/sys/class/bluetooth).")
+        return 0
+
+    ble_adapters = [
+        adapter for adapter in os.listdir("/sys/class/bluetooth/") if adapter.startswith("hci")
+    ]
+    ble_adapters.sort()
+
+    if device_args is None:
+        print("\n\n[#]\t[HCI DEVICE]\n" + "-" * shutil.get_terminal_size().columns)
+        for index, adapter in enumerate(ble_adapters):
+            print(f"{index}".ljust(8) + f"{adapter}".ljust(34))
+        selection = input("[?] Wall of Flippers >> ")
+    else:
+        selection = device_args
+
+    if selection == "":
+        return 0
+
+    selection_str = str(selection).strip().lower()
+    if selection_str.startswith("hci"):
+        return normalize_hci(selection_str)
+
+    if selection_str.isdigit() and int(selection_str) < len(ble_adapters):
+        return normalize_hci(ble_adapters[int(selection_str)])
+
+    return normalize_hci(selection_str)
 
 def is_in_venv():
     """Returns True if the user is in a virtual environment, otherwise returns False"""
     return sys.prefix != sys.base_prefix
 
-def print_ascii_art(custom_text:str=None):
+def print_ascii_art(custom_text=None):
     """Displays ASCII art in the terminal with the custom text if provided, otherwise displays a random quote"""
-    os.system('cls' if os.name == 'nt' else 'clear')
+    if not cache.wof_data.get("no_clear"):
+        os.system('cls' if os.name == 'nt' else 'clear')
     r_quote = random.choice(cache.wof_data['dolphin_thinking']) if not custom_text else custom_text
     # selecting adequate ASCII art based on the terminal size and if the user is in narrow mode
     print("\033[0;94m")
@@ -301,8 +475,16 @@ def init():
 
 
     try:
-        str_input = input("\n[?] Wall of Flippers >> ")
-        return dialogue_options_dict.get(str_input)
+        while True:
+            str_input = input("\n[?] Wall of Flippers >> ").strip()
+            result = dialogue_options_dict.get(str_input)
+            if result is not None:
+                if result == "exit":
+                    print_ascii_art("Thank you for using Wall of Flippers... Goodbye!")
+                    print("\n[!] Wall of Flippers >> Exiting...")
+                    sys.exit()
+                return result
+            print("[!] Wall of Flippers >> Invalid option. Please choose from the menu.")
     except KeyboardInterrupt:
         print_ascii_art("Thank you for using Wall of Flippers... Goodbye!")
         print("\n[!] Wall of Flippers >> Exiting...")

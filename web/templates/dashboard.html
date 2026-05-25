@@ -1,0 +1,1028 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full dark" id="html-root">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{{ title }} — TACCOM</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script>tailwind.config = { darkMode: 'class' };</script>
+  <style>
+    :root {
+      --wof-bg: #c4b89a; --wof-card: #d8d0b8; --wof-border: #6b6352;
+      --wof-text: #1a1f14; --wof-muted: #4a5240; --wof-accent: #3d4f2f;
+      --wof-phosphor: #2d5016; --wof-alert: #8b4513; --wof-danger: #7f1d1d;
+      --wof-hud: rgba(45, 80, 22, 0.12);
+    }
+    html.dark {
+      --wof-bg: #0a0e08; --wof-card: #0f1410; --wof-border: #2a3d22;
+      --wof-text: #b8c9a8; --wof-muted: #6b7d5c; --wof-accent: #4ade80;
+      --wof-phosphor: #86efac; --wof-alert: #fbbf24; --wof-danger: #f87171;
+      --wof-hud: rgba(74, 222, 128, 0.06);
+    }
+    body {
+      background: var(--wof-bg); color: var(--wof-text);
+      font-family: 'Share Tech Mono', 'IBM Plex Mono', monospace;
+      background-image:
+        linear-gradient(rgba(42, 61, 34, 0.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(42, 61, 34, 0.04) 1px, transparent 1px);
+      background-size: 24px 24px;
+    }
+    .wof-card { background: var(--wof-card); border-color: var(--wof-border); }
+    .wof-muted { color: var(--wof-muted); }
+    .wof-accent { color: var(--wof-phosphor); }
+    .wof-label { font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--wof-muted); }
+    .hud-panel {
+      position: relative; border: 1px solid var(--wof-border);
+      background: var(--wof-card); box-shadow: inset 0 0 40px var(--wof-hud);
+    }
+    .hud-panel::before, .hud-panel::after {
+      content: ''; position: absolute; width: 12px; height: 12px;
+      border-color: var(--wof-phosphor); border-style: solid; opacity: 0.7; pointer-events: none;
+    }
+    .hud-panel::before { top: -1px; left: -1px; border-width: 2px 0 0 2px; }
+    .hud-panel::after { bottom: -1px; right: -1px; border-width: 0 2px 2px 0; }
+    .scanlines {
+      pointer-events: none; position: fixed; inset: 0; z-index: 50; opacity: 0.04;
+      background: repeating-linear-gradient(0deg, transparent, transparent 2px, #000 2px, #000 4px);
+    }
+    html.dark .scanlines { opacity: 0.06; }
+    .tab-active {
+      background: var(--wof-hud); color: var(--wof-phosphor);
+      border-color: var(--wof-phosphor) !important; box-shadow: 0 0 8px rgba(74, 222, 128, 0.15);
+    }
+    tr.row-selected { background: var(--wof-hud) !important; outline: 1px solid var(--wof-phosphor); }
+    .hero-flipper {
+      border: 1px solid var(--wof-phosphor);
+      background: linear-gradient(160deg, var(--wof-hud), transparent);
+      border-radius: 0;
+    }
+    .hero-flipper:hover { box-shadow: 0 0 12px rgba(74, 222, 128, 0.2); }
+    .stat-card-primary {
+      border-color: var(--wof-phosphor) !important;
+      box-shadow: 0 0 0 1px var(--wof-phosphor), inset 0 0 24px var(--wof-hud);
+    }
+    .tac-btn {
+      font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+      border: 1px solid var(--wof-border); padding: 6px 10px; background: var(--wof-card);
+    }
+    .tac-btn:hover { border-color: var(--wof-phosphor); color: var(--wof-phosphor); }
+    .tac-badge { font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; border: 1px solid var(--wof-border); padding: 4px 8px; }
+    .rssi-up { color: var(--wof-phosphor); }
+    .rssi-down { color: var(--wof-danger); }
+    .rssi-flat { color: var(--wof-muted); }
+    .trust-high { color: var(--wof-phosphor); }
+    .trust-med { color: #a3e635; }
+    .trust-low { color: var(--wof-alert); }
+    .trust-spoof { color: var(--wof-danger); text-shadow: 0 0 6px var(--wof-danger); }
+    #alert-banner.tac-alert {
+      border-color: var(--wof-alert); color: var(--wof-alert);
+      background: rgba(251, 191, 36, 0.08); font-family: inherit; letter-spacing: 0.04em;
+    }
+    h1, h2 { letter-spacing: 0.06em; text-transform: uppercase; }
+    table th { letter-spacing: 0.1em; text-transform: uppercase; font-size: 10px; }
+    select, summary { font-family: inherit; }
+    .row-hostile {
+      background: rgba(248, 113, 113, 0.08) !important;
+      border-left: 3px solid var(--wof-danger);
+    }
+    .row-hostile-new { animation: hostile-flash 1.2s ease 3; }
+    @keyframes hostile-flash {
+      0%, 100% { background: rgba(248, 113, 113, 0.08); }
+      50% { background: rgba(248, 113, 113, 0.28); }
+    }
+    .flag-hostile {
+      font-size: 9px; letter-spacing: 0.08em; padding: 1px 5px;
+      border: 1px solid var(--wof-danger); color: var(--wof-danger);
+      background: rgba(248, 113, 113, 0.12);
+    }
+    #hostile-alert.hostile-active {
+      border-color: var(--wof-danger); color: var(--wof-danger);
+      background: rgba(248, 113, 113, 0.12);
+      animation: hostile-flash 0.8s ease 2;
+    }
+    #radar-canvas { width: 100%; height: 100%; display: block; cursor: crosshair; }
+    .radar-wrap { aspect-ratio: 1; max-height: 320px; min-height: 220px; }
+  </style>
+  <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet" />
+</head>
+<body class="h-full antialiased">
+  <div class="scanlines" aria-hidden="true"></div>
+  <div class="min-h-full flex flex-col relative z-10">
+    <header class="border-b-2 wof-card sticky top-0 z-20" style="border-color: var(--wof-phosphor);">
+      <div class="max-w-7xl mx-auto px-4 py-2 flex flex-wrap items-center justify-between gap-3">
+        <div class="flex items-center gap-3">
+          <div class="w-11 h-11 border-2 flex items-center justify-center font-bold text-xs wof-accent" style="border-color: var(--wof-phosphor); color: var(--wof-phosphor);">
+            WOF
+          </div>
+          <div>
+            <h1 class="text-base font-bold wof-accent">Wall of Flippers</h1>
+            <p class="text-[10px] wof-muted tracking-widest">SIGINT · DETECT ONLY · NO MITIGATION</p>
+          </div>
+        </div>
+        <div class="flex flex-wrap items-center gap-2 font-mono">
+          <a href="/api/export.csv" class="tac-btn wof-card">↓ EXFIL CSV</a>
+          <button type="button" id="btn-theme" class="tac-btn wof-card">DAYLIGHT</button>
+          <button type="button" id="btn-mute" class="tac-btn wof-card" title="Toggle alert tone">AUDIO ON</button>
+          <button type="button" id="btn-test-beep" class="tac-btn wof-card" title="Test alert sound">TEST ALERT</button>
+          <span id="badge-platform" class="tac-badge wof-card font-mono">—</span>
+          <span id="badge-scan" class="tac-badge wof-card">STANDBY</span>
+          <span id="badge-sse" class="tac-badge wof-card">LINK DOWN</span>
+        </div>
+      </div>
+    </header>
+
+    <main class="flex-1 max-w-7xl mx-auto w-full px-4 py-4 space-y-4">
+      <div id="alert-banner" class="hidden hud-panel tac-alert px-4 py-2 text-xs"></div>
+      <div id="audio-unlock" class="hud-panel px-4 py-2 text-xs font-bold tracking-wide cursor-pointer" style="border-color: var(--wof-alert); color: var(--wof-alert);">
+        ▶ TAP HERE TO ARM ALERT AUDIO (browser requires click)
+      </div>
+      <div id="hostile-alert" class="hidden hud-panel px-4 py-2 text-xs font-bold tracking-wide"></div>
+
+      <section class="grid grid-cols-2 md:grid-cols-4 gap-2">
+        <div id="stat-card-live" class="hud-panel p-3 stat-card-primary">
+          <p class="wof-label">FLIPPER · LIVE</p>
+          <p id="stat-online" class="text-3xl font-bold wof-accent mt-1 tabular-nums">0</p>
+          <p id="stat-live-sub" class="text-[10px] wof-muted mt-1 truncate">—</p>
+        </div>
+        <div class="hud-panel p-3 opacity-95">
+          <p class="wof-label">SIGINT · BLE</p>
+          <p id="stat-ble" class="text-2xl font-bold wof-accent mt-1 tabular-nums">0</p>
+          <p id="stat-ble-sub" class="text-[10px] wof-muted mt-1">advertisers</p>
+        </div>
+        <div class="hud-panel p-3 opacity-95">
+          <p class="wof-label">EW · SPAM</p>
+          <p id="stat-spam" class="text-2xl font-bold mt-1 tabular-nums" style="color: var(--wof-alert);">0</p>
+          <p id="stat-spam-sub" class="text-[10px] wof-muted mt-1">cycle</p>
+        </div>
+        <div class="hud-panel p-3 opacity-80" title="Archive × unit cost estimate">
+          <p class="wof-label">INTEL · ARCHIVE</p>
+          <p id="stat-archive" class="text-2xl font-bold wof-accent mt-1 tabular-nums">$0</p>
+          <p id="stat-archive-sub" class="text-[10px] wof-muted mt-1">historical</p>
+        </div>
+      </section>
+
+      <div class="grid lg:grid-cols-3 gap-3">
+        <section class="lg:col-span-2 hud-panel flex flex-col min-h-[280px]">
+          <div class="px-3 py-2 border-b flex flex-wrap justify-between gap-2 items-center" style="border-color: var(--wof-border);">
+            <div>
+              <h2 class="text-sm font-bold wof-accent">SIGINT · BLE SPECTRUM</h2>
+              <p class="wof-label">PRIMARY CONTACT LIST · FLIPPER AUTO-FLAG</p>
+            </div>
+            <div class="flex gap-1" id="ble-tabs">
+              <button type="button" data-filter="all" class="ble-tab tac-btn tab-active">ALL</button>
+                <button type="button" data-filter="flipper" class="ble-tab tac-btn wof-muted">FLIPPER</button>
+              <button type="button" data-filter="other" class="ble-tab tac-btn wof-muted">CIV</button>
+            </div>
+          </div>
+          <div class="overflow-x-auto flex-1 max-h-[360px]">
+            <table class="w-full text-xs">
+              <thead class="text-left wof-muted border-b sticky top-0 wof-card z-10" style="border-color: var(--wof-border);">
+                <tr>
+                  <th class="px-2 py-2 w-8"></th>
+                  <th class="px-2 py-2">CALLSIGN</th>
+                  <th class="px-2 py-2">ID</th>
+                  <th class="px-2 py-2">CLASS</th>
+                  <th class="px-2 py-2">SIG</th>
+                  <th class="px-2 py-2">RNG</th>
+                </tr>
+              </thead>
+              <tbody id="table-ble"></tbody>
+            </table>
+          </div>
+          <p id="empty-ble" class="hidden py-8 text-center text-xs wof-muted">NO CONTACTS — SWEEPING…</p>
+        </section>
+
+        <section class="hud-panel p-3 flex flex-col">
+          <div class="mb-2">
+            <h2 class="text-sm font-bold wof-accent">RANGE · RADAR</h2>
+            <p class="wof-label">EST. DISTANCE (RSSI) · NO AoA</p>
+          </div>
+          <div class="radar-wrap flex-1 border relative" style="border-color: var(--wof-border);">
+            <canvas id="radar-canvas"></canvas>
+          </div>
+          <p id="radar-legend" class="text-[9px] wof-muted mt-2 leading-relaxed">
+            ◎ YOU · ring = ~5m · bearing = pseudo · not GPS
+          </p>
+        </section>
+      </div>
+
+      <section id="hero-section" class="hud-panel p-4">
+        <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+          <div>
+            <h2 class="text-sm font-bold wof-accent flex items-center gap-2">
+              <span id="hero-pulse" class="hidden w-2 h-2 bg-current animate-pulse" style="color: var(--wof-phosphor);"></span>
+              PRIORITY TARGETS
+            </h2>
+            <p class="wof-label mt-0.5">LOCK TRACK · SELECT FOR RSSI PLOT</p>
+          </div>
+          <span id="hero-count" class="tac-badge wof-accent">0 IN AO</span>
+        </div>
+        <div id="hero-grid" class="grid sm:grid-cols-2 gap-2 hidden"></div>
+        <p id="empty-hero" class="py-8 text-center text-xs wof-muted border border-dashed" style="border-color: var(--wof-border);">
+          NO FLIPPERS IN AO — PASSIVE LISTEN…
+        </p>
+        <details id="hero-details" class="mt-3 hidden">
+          <summary class="wof-label cursor-pointer hover:opacity-80">▼ TARGET ROSTER</summary>
+          <div class="overflow-x-auto mt-2 border" style="border-color: var(--wof-border);">
+            <table class="w-full text-xs">
+              <thead class="text-left wof-muted border-b wof-card" style="border-color: var(--wof-border);">
+                <tr><th class="px-3 py-2">CALLSIGN</th><th class="px-3 py-2">ID</th><th class="px-3 py-2">TRUST</th><th class="px-3 py-2">SIG</th><th class="px-3 py-2">T−</th></tr>
+              </thead>
+              <tbody id="table-online" class="text-xs"></tbody>
+            </table>
+          </div>
+        </details>
+      </section>
+
+      <div class="hud-panel p-4">
+        <div class="flex flex-wrap justify-between items-center gap-2 mb-2">
+          <h2 class="text-sm font-bold wof-accent">SIGNAL PLOT · RSSI</h2>
+          <p id="chart-hint" class="wof-label">SELECT TARGET TO LOCK</p>
+        </div>
+        <div class="h-44 md:h-52 border" style="border-color: var(--wof-border);"><canvas id="rssi-chart"></canvas></div>
+      </div>
+
+      <div class="grid lg:grid-cols-3 gap-3">
+        <section class="lg:col-span-2 space-y-3">
+          <div class="hud-panel overflow-hidden">
+            <div class="px-3 py-2 border-b flex flex-wrap gap-2 items-center justify-between" style="border-color: var(--wof-border);">
+              <h2 class="text-sm font-bold" style="color: var(--wof-alert);">EW · BLE SPAM</h2>
+              <select id="spam-filter" class="text-[10px] border px-2 py-1 wof-card uppercase tracking-wider" style="border-color: var(--wof-border);">
+                <option value="">ALL SIG</option>
+              </select>
+            </div>
+            <ul id="list-spam" class="text-xs max-h-44 overflow-y-auto divide-y" style="border-color: var(--wof-border);"></ul>
+            <p id="empty-spam" class="py-4 text-center text-xs wof-muted">CLEAR — NO EW PATTERNS</p>
+          </div>
+        </section>
+
+        <aside class="space-y-3">
+          <div class="hud-panel p-3">
+            <h2 class="text-sm font-bold wof-accent mb-2">FRIENDLY · WOF NET</h2>
+            <ul id="list-wof" class="text-xs space-y-1 wof-muted"></ul>
+            <p id="empty-wof" class="text-xs wof-muted">NO FRIENDLY WOF IN AO</p>
+          </div>
+          <div class="hud-panel p-3 max-h-96 overflow-hidden flex flex-col">
+            <h2 class="text-sm font-bold wof-accent mb-2">COMMS LOG</h2>
+            <ul id="event-log" class="text-[10px] flex-1 overflow-y-auto space-y-0.5 wof-muted"></ul>
+          </div>
+        </aside>
+      </div>
+    </main>
+    <footer class="border-t-2 py-2 text-center text-[10px] wof-muted tracking-widest" style="border-color: var(--wof-border);">
+      <span id="footer-ts">—</span>
+      <span class="mx-2 opacity-40">|</span>
+      <span>WOF TACCOM v2 · UNCLASS</span>
+    </footer>
+  </div>
+
+  <script>
+    let lastSnapshot = {};
+    let bleFilter = 'all';
+    let spamFilter = '';
+    let selectedMac = null;
+    let rssiChart = null;
+    const prevRssiMap = {};
+    const newlyFlaggedMacs = new Set();
+    const beepDebounce = new Map();
+    let prevScanHostiles = new Set();
+    let snapshotBoot = true;
+    let audioMuted = localStorage.getItem('wof-audio-muted') === '1';
+    let audioUnlocked = false;
+    let audioCtx = null;
+
+    function initAudio() {
+      if (!audioCtx) {
+        const Ctx = window.AudioContext || window.webkitAudioContext;
+        if (!Ctx) return null;
+        audioCtx = new Ctx();
+      }
+      return audioCtx;
+    }
+
+    async function unlockAudio() {
+      if (audioMuted) return null;
+      const ctx = initAudio();
+      if (!ctx) return null;
+      try {
+        if (ctx.state === 'suspended') await ctx.resume();
+        audioUnlocked = ctx.state === 'running';
+      } catch (_) {
+        audioUnlocked = false;
+      }
+      updateAudioBanner();
+      return ctx;
+    }
+
+    function updateAudioBanner() {
+      const el = document.getElementById('audio-unlock');
+      if (!el) return;
+      if (audioMuted) {
+        el.textContent = 'AUDIO MUTED — press AUDIO ON to enable alerts';
+        el.classList.remove('hidden');
+      } else if (!audioUnlocked) {
+        el.textContent = '▶ TAP HERE TO ARM ALERT AUDIO (browser requires click)';
+        el.classList.remove('hidden');
+      } else {
+        el.classList.add('hidden');
+      }
+    }
+
+    async function playBeep(kind = 'hostile') {
+      if (audioMuted) return;
+      const ctx = await unlockAudio();
+      if (!ctx || ctx.state !== 'running') return;
+      try {
+        const t0 = ctx.currentTime + 0.02;
+        const vol = 0.38;
+        const tones = kind === 'hostile'
+          ? [[880, 0, 0.14], [1100, 0.16, 0.14], [1320, 0.32, 0.22]]
+          : [[740, 0, 0.12]];
+        tones.forEach(([freq, delay, dur]) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'square';
+          osc.frequency.value = freq;
+          gain.gain.setValueAtTime(0.001, t0 + delay);
+          gain.gain.exponentialRampToValueAtTime(vol, t0 + delay + 0.015);
+          gain.gain.exponentialRampToValueAtTime(0.001, t0 + delay + dur);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start(t0 + delay);
+          osc.stop(t0 + delay + dur + 0.05);
+        });
+      } catch (e) {
+        console.warn('playBeep failed', e);
+      }
+    }
+
+    function hostileKey(d) {
+      return (d.mac_raw || d.mac || '').toLowerCase();
+    }
+
+    function collectHostiles(data) {
+      const map = new Map();
+      (data.ble_devices_all || data.ble_devices || []).forEach(d => {
+        if (d.is_flipper) map.set(hostileKey(d), d);
+      });
+      (data.online || []).forEach(f => {
+        const k = hostileKey(f);
+        if (k) map.set(k, f);
+      });
+      return map;
+    }
+
+    function hostilesEnteredScan(data) {
+      const current = collectHostiles(data);
+      const fresh = [];
+      current.forEach((d, k) => {
+        if (!prevScanHostiles.has(k)) fresh.push(d);
+      });
+      prevScanHostiles = new Set(current.keys());
+      return fresh;
+    }
+
+    function shouldBeepForMac(mac) {
+      const k = (mac || '').toLowerCase();
+      if (!k) return false;
+      const now = Date.now();
+      if (beepDebounce.has(k) && now - beepDebounce.get(k) < 12000) return false;
+      beepDebounce.set(k, now);
+      return true;
+    }
+
+    async function alertHostiles(devices, reason) {
+      if (!devices.length || audioMuted) return;
+      newlyFlaggedMacs.clear();
+      devices.forEach(d => {
+        const k = hostileKey(d);
+        newlyFlaggedMacs.add(k);
+        setTimeout(() => newlyFlaggedMacs.delete(k), 6000);
+      });
+      showHostileAlert(devices);
+      await playBeep('hostile');
+      console.info('[WOF] alert', reason, devices.map(d => d.name || hostileKey(d)));
+    }
+
+    function updateMuteBtn() {
+      const btn = document.getElementById('btn-mute');
+      btn.textContent = audioMuted ? 'AUDIO OFF' : 'AUDIO ON';
+      btn.style.opacity = audioMuted ? '0.55' : '1';
+      updateAudioBanner();
+    }
+
+    document.getElementById('btn-mute').onclick = async () => {
+      audioMuted = !audioMuted;
+      localStorage.setItem('wof-audio-muted', audioMuted ? '1' : '0');
+      updateMuteBtn();
+      if (!audioMuted) await playBeep('ping');
+    };
+
+    document.getElementById('btn-test-beep').onclick = async () => {
+      audioMuted = false;
+      localStorage.setItem('wof-audio-muted', '0');
+      updateMuteBtn();
+      await playBeep('hostile');
+    };
+
+    document.getElementById('audio-unlock').onclick = async () => {
+      audioMuted = false;
+      localStorage.setItem('wof-audio-muted', '0');
+      updateMuteBtn();
+      await playBeep('ping');
+    };
+
+    ['click', 'keydown', 'touchstart'].forEach(evt => {
+      document.addEventListener(evt, () => unlockAudio(), { passive: true });
+    });
+
+    updateMuteBtn();
+
+    const trustClass = (t) => ({
+      'High': 'trust-high', 'Medium': 'trust-med', 'Low': 'trust-low', 'Spoof?': 'trust-spoof'
+    }[t] || 'wof-muted');
+
+    function themeInit() {
+      const saved = localStorage.getItem('wof-theme') || 'dark';
+      document.documentElement.classList.toggle('dark', saved === 'dark');
+      document.getElementById('btn-theme').textContent = saved === 'dark' ? 'DAYLIGHT' : 'NIGHT OPS';
+    }
+    document.getElementById('btn-theme').onclick = () => {
+      const dark = document.documentElement.classList.toggle('dark');
+      localStorage.setItem('wof-theme', dark ? 'dark' : 'light');
+      document.getElementById('btn-theme').textContent = dark ? 'DAYLIGHT' : 'NIGHT OPS';
+      updateChartTheme();
+      const all = lastSnapshot.ble_devices_all || lastSnapshot.ble_devices || [];
+      drawRadar(all);
+    };
+
+    document.querySelectorAll('.ble-tab').forEach(btn => {
+      btn.onclick = () => {
+        bleFilter = btn.dataset.filter;
+        document.querySelectorAll('.ble-tab').forEach(b => {
+          b.classList.remove('tab-active');
+          b.classList.add('wof-muted');
+        });
+        btn.classList.add('tab-active');
+        btn.classList.remove('wof-muted');
+        renderBleTable();
+      };
+    });
+
+    document.getElementById('spam-filter').onchange = (e) => {
+      spamFilter = e.target.value;
+      renderSpam(lastSnapshot.spam || []);
+    };
+
+    function filterBle(devices) {
+      if (bleFilter === 'flipper') return devices.filter(d => d.is_flipper);
+      if (bleFilter === 'other') return devices.filter(d => !d.is_flipper);
+      return devices;
+    }
+
+    function fmtDist(m) {
+      if (m == null) return '—';
+      return m < 1 ? `${Math.round(m * 100)}cm` : `~${m}m`;
+    }
+
+    function showHostileAlert(devices) {
+      const el = document.getElementById('hostile-alert');
+      const names = devices.map(d => d.name || fmtMac(d.mac)).join(' · ');
+      el.textContent = `⚠ FLIPPER DETECTED — ${names}`;
+      el.classList.remove('hidden', 'hostile-active');
+      void el.offsetWidth;
+      el.classList.add('hostile-active');
+      setTimeout(() => el.classList.remove('hostile-active'), 2500);
+    }
+
+    function renderBleTable() {
+      const all = lastSnapshot.ble_devices_all || lastSnapshot.ble_devices || [];
+      const rows = filterBle(all);
+      const tbody = document.getElementById('table-ble');
+      const empty = document.getElementById('empty-ble');
+      tbody.innerHTML = '';
+      document.getElementById('stat-ble').textContent = all.length;
+      const hostiles = all.filter(d => d.is_flipper).length;
+      document.getElementById('stat-ble-sub').textContent =
+        hostiles ? `${hostiles} FLIPPER / ${all.length} total` : `${all.length} CONTACTS`;
+      if (!rows.length) { empty.classList.remove('hidden'); return; }
+      empty.classList.add('hidden');
+      rows.forEach(r => {
+        const tr = document.createElement('tr');
+        const macKey = (r.mac_raw || r.mac || '').toLowerCase();
+        let cls = 'hover:opacity-80 cursor-pointer border-b';
+        if (r.is_flipper) cls += ' row-hostile';
+        if (newlyFlaggedMacs.has(macKey)) cls += ' row-hostile-new';
+        if (selectedMac && selectedMac.toLowerCase() === macKey) cls += ' row-selected';
+        tr.className = cls;
+        tr.style.borderColor = 'var(--wof-border)';
+        tr.onclick = () => selectMac(r.mac_raw || r.mac);
+        const rc = r.is_flipper ? 'wof-accent font-bold' : 'wof-muted';
+        const flag = r.is_flipper
+          ? '<span class="flag-hostile">FLIPPER</span>'
+          : '<span class="wof-muted text-[9px]">CIV</span>';
+        tr.title = `${macKey} · ${fmtDist(r.est_distance_m)} est.`;
+        tr.innerHTML = `
+          <td class="px-2 py-2">${flag}</td>
+          <td class="px-2 py-2 max-w-[7rem] truncate font-semibold">${r.name}</td>
+          <td class="px-2 py-2" title="${r.mac}">${fmtMac(r.mac)}</td>
+          <td class="px-2 py-2 ${rc}">${r.role}</td>
+          <td class="px-2 py-2 tabular-nums">${fmtRssi(r.rssi)}</td>
+          <td class="px-2 py-2 tabular-nums wof-muted">${fmtDist(r.est_distance_m)}</td>`;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function drawRadar(devices) {
+      const canvas = document.getElementById('radar-canvas');
+      const wrap = canvas.parentElement;
+      const dpr = window.devicePixelRatio || 1;
+      const w = wrap.clientWidth;
+      const h = wrap.clientHeight;
+      if (w < 10 || h < 10) return;
+      canvas.width = w * dpr;
+      canvas.height = h * dpr;
+      const ctx = canvas.getContext('2d');
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      const cx = w / 2;
+      const cy = h / 2;
+      const maxR = Math.min(cx, cy) - 14;
+      const maxDist = 25;
+
+      const dark = document.documentElement.classList.contains('dark');
+      const gridC = dark ? '#2a3d22' : '#8a9a7a';
+      const textC = dark ? '#6b7d5c' : '#4a5240';
+      const phosphor = dark ? '#86efac' : '#2d5016';
+      const danger = dark ? '#f87171' : '#7f1d1d';
+
+      ctx.fillStyle = dark ? '#0a0e08' : '#d8d0b8';
+      ctx.fillRect(0, 0, w, h);
+
+      for (let ring = 1; ring <= 5; ring++) {
+        const r = (ring / 5) * maxR;
+        ctx.strokeStyle = gridC;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, 0, Math.PI * 2);
+        ctx.stroke();
+        const labelM = Math.round((ring / 5) * maxDist);
+        ctx.fillStyle = textC;
+        ctx.font = '9px Share Tech Mono, monospace';
+        ctx.fillText(`${labelM}m`, cx + 4, cy - r + 10);
+      }
+      ctx.strokeStyle = gridC;
+      ctx.beginPath();
+      ctx.moveTo(cx, cy - maxR); ctx.lineTo(cx, cy + maxR);
+      ctx.moveTo(cx - maxR, cy); ctx.lineTo(cx + maxR, cy);
+      ctx.stroke();
+
+      ctx.fillStyle = phosphor;
+      ctx.font = 'bold 10px Share Tech Mono, monospace';
+      ctx.fillText('◎ YOU', cx - 14, cy + 4);
+
+      const list = (devices || []).filter(d => d.rssi_num != null || parseRssiNum(d.rssi) != null);
+      list.forEach(d => {
+        const dist = d.est_distance_m ?? rssiToDistClient(parseRssiNum(d.rssi));
+        if (dist == null) return;
+        const bearing = ((d.bearing_deg ?? 0) - 90) * Math.PI / 180;
+        const rad = Math.min(dist / maxDist, 1) * maxR;
+        const x = cx + Math.cos(bearing) * rad;
+        const y = cy + Math.sin(bearing) * rad;
+        const hostile = d.is_flipper;
+        const sel = selectedMac && (selectedMac === (d.mac_raw || d.mac) ||
+          selectedMac.toLowerCase() === (d.mac_raw || d.mac || '').toLowerCase());
+
+        ctx.beginPath();
+        ctx.arc(x, y, hostile ? 7 : 4, 0, Math.PI * 2);
+        ctx.fillStyle = hostile ? danger : phosphor;
+        ctx.globalAlpha = hostile ? 1 : 0.55;
+        ctx.fill();
+        ctx.globalAlpha = 1;
+        if (sel) {
+          ctx.strokeStyle = '#fbbf24';
+          ctx.lineWidth = 2;
+          ctx.stroke();
+        }
+        if (hostile) {
+          ctx.strokeStyle = danger;
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(x - 5, y - 8); ctx.lineTo(x + 5, y - 8);
+          ctx.lineTo(x, y - 14); ctx.closePath();
+          ctx.stroke();
+        }
+        ctx.fillStyle = hostile ? danger : textC;
+        ctx.font = '9px Share Tech Mono, monospace';
+        const lbl = (d.name || '').slice(0, 10);
+        ctx.fillText(lbl, x + 8, y + 3);
+      });
+    }
+
+    function rssiToDistClient(rssi, tx = -59, n = 2.2) {
+      if (rssi == null) return null;
+      const d = Math.pow(10, (tx - rssi) / (10 * n));
+      return Math.round(Math.max(0.3, Math.min(40, d)) * 10) / 10;
+    }
+
+    function fmtRssi(v) {
+      if (v == null) return '—';
+      const s = String(v);
+      return s.includes('dBm') ? s : s + ' dBm';
+    }
+
+    function fmtMac(mac) {
+      if (!mac) return '—';
+      const s = String(mac);
+      if (s.length <= 20) return s;
+      return s.slice(0, 10) + '…' + s.slice(-6);
+    }
+
+    function fmtAgo(sec) {
+      if (sec == null || sec < 0) return '—';
+      if (sec < 60) return `T−${sec}s`;
+      if (sec < 3600) return `T−${Math.floor(sec / 60)}m`;
+      return `T−${Math.floor(sec / 3600)}h`;
+    }
+
+    function parseRssiNum(r) {
+      if (typeof r === 'number') return r;
+      if (r == null) return null;
+      const m = String(r).match(/-?\d+/);
+      return m ? parseInt(m[0], 10) : null;
+    }
+
+    function rssiDeltaHtml(macKey, delta) {
+      if (delta == null || !macKey) return '<span class="rssi-flat text-[10px]">—</span>';
+      if (delta === 0) return '<span class="rssi-flat text-[10px]">±0</span>';
+      const cls = delta > 0 ? 'rssi-up' : 'rssi-down';
+      const arrow = delta > 0 ? '↑' : '↓';
+      return `<span class="${cls} text-[10px] font-semibold">${arrow}${Math.abs(delta)}</span>`;
+    }
+
+    function computeRssiDeltas(devices) {
+      const out = {};
+      devices.forEach(f => {
+        const macKey = f.mac_raw || f.mac;
+        const rssiNum = f.rssi_num ?? parseRssiNum(f.rssi);
+        if (rssiNum == null || !macKey) return;
+        const prev = prevRssiMap[macKey];
+        out[macKey] = prev == null ? null : rssiNum - prev;
+        prevRssiMap[macKey] = rssiNum;
+      });
+      return out;
+    }
+
+    let lastRssiDeltas = {};
+
+    function selectMac(macKey) {
+      selectedMac = macKey;
+      const all = lastSnapshot.ble_devices_all || lastSnapshot.ble_devices || [];
+      renderBleTable();
+      renderHero(lastSnapshot.online || [], lastRssiDeltas);
+      drawRadar(all);
+      drawRssiChart(selectedMac);
+    }
+
+    function renderHero(online, deltas = lastRssiDeltas) {
+      const grid = document.getElementById('hero-grid');
+      const empty = document.getElementById('empty-hero');
+      const pulse = document.getElementById('hero-pulse');
+      const count = document.getElementById('hero-count');
+      const details = document.getElementById('hero-details');
+      const cardLive = document.getElementById('stat-card-live');
+
+      count.textContent = `${online.length} IN AO`;
+      grid.innerHTML = '';
+
+      if (!online.length) {
+        grid.classList.add('hidden');
+        empty.classList.remove('hidden');
+        details.classList.add('hidden');
+        pulse.classList.add('hidden');
+        cardLive.classList.remove('stat-card-primary');
+        return;
+      }
+
+      empty.classList.add('hidden');
+      grid.classList.remove('hidden');
+      details.classList.remove('hidden');
+      pulse.classList.remove('hidden');
+      cardLive.classList.add('stat-card-primary');
+
+      online.forEach(f => {
+        const macKey = f.mac_raw || f.mac;
+        const delta = rssiDeltaHtml(macKey, deltas[macKey]);
+        const ago = fmtAgo(f.last_seen_ago_sec);
+        const sel = selectedMac === macKey;
+        const card = document.createElement('button');
+        card.type = 'button';
+        card.className = 'hero-flipper p-3 text-left transition hover:brightness-110' +
+          (sel ? ' outline outline-1 outline-[var(--wof-phosphor)]' : '');
+        card.onclick = () => selectMac(macKey);
+        card.innerHTML = `
+          <div class="flex justify-between items-start gap-2">
+            <span class="font-bold text-sm truncate wof-accent tracking-wide">${f.name || 'UNKNOWN'}</span>
+            <span class="text-[9px] px-1 py-0.5 border ${trustClass(f.trust)}" style="border-color: currentColor">${f.trust}</span>
+          </div>
+          <p class="text-[10px] wof-muted mt-1" title="${f.mac}">ID ${fmtMac(f.mac)}</p>
+          <div class="flex items-end justify-between mt-2 gap-2">
+            <div>
+              <p class="text-xl font-bold tabular-nums wof-accent">${fmtRssi(f.rssi)}</p>
+              <p class="wof-label">${f.detection || 'SIGINT'}</p>
+            </div>
+            <div class="text-right">
+              ${delta}
+              <p class="text-[10px] wof-muted mt-0.5">${ago}</p>
+            </div>
+          </div>`;
+        grid.appendChild(card);
+      });
+    }
+
+    function renderTable(tbodyId, rows, emptyId, cols) {
+      const tbody = document.getElementById(tbodyId);
+      const empty = emptyId ? document.getElementById(emptyId) : null;
+      tbody.innerHTML = '';
+      if (!rows?.length) { empty?.classList.remove('hidden'); return; }
+      empty?.classList.add('hidden');
+      rows.forEach(r => {
+        const tr = document.createElement('tr');
+        tr.className = 'border-b hover:opacity-80';
+        tr.style.borderColor = 'var(--wof-border)';
+        tr.innerHTML = cols(r).map(c => `<td class="px-3 py-2">${c}</td>`).join('');
+        tbody.appendChild(tr);
+      });
+    }
+
+    function renderSpam(spam) {
+      const list = document.getElementById('list-spam');
+      const empty = document.getElementById('empty-spam');
+      const filtered = spamFilter ? spam.filter(s => s.type === spamFilter) : spam;
+      list.innerHTML = '';
+      if (!filtered.length) { empty.classList.remove('hidden'); return; }
+      empty.classList.add('hidden');
+      filtered.forEach(s => {
+        const li = document.createElement('li');
+        li.className = 'px-3 py-2';
+        li.style.color = 'var(--wof-alert)';
+        li.innerHTML = `<span class="font-bold">[${s.type}]</span> ${s.mac}`;
+        list.appendChild(li);
+      });
+    }
+
+    function updateSpamFilterOptions(types) {
+      const sel = document.getElementById('spam-filter');
+      const cur = sel.value;
+      sel.innerHTML = '<option value="">ALL SIG</option>';
+      (types || []).forEach(t => {
+        const o = document.createElement('option');
+        o.value = t; o.textContent = t;
+        sel.appendChild(o);
+      });
+      if ([...sel.options].some(o => o.value === cur)) sel.value = cur;
+    }
+
+    function chartColors() {
+      const dark = document.documentElement.classList.contains('dark');
+      return {
+        grid: dark ? '#2a3d22' : '#6b7d5c',
+        text: dark ? '#6b7d5c' : '#4a5240',
+        lines: dark
+          ? ['#86efac', '#a3e635', '#4ade80', '#fbbf24', '#f87171', '#67e8f9', '#c4b5fd', '#fcd34d']
+          : ['#2d5016', '#3d4f2f', '#4a7c23', '#8b4513', '#7f1d1d', '#1e3a5f', '#5c4d7a', '#6b5b2e'],
+      };
+    }
+
+    function updateChartTheme() {
+      if (rssiChart) drawRssiChart(selectedMac);
+    }
+
+    async function drawRssiChart(focusMac) {
+      const c = chartColors();
+      let series = (lastSnapshot.rssi_charts || []).slice(0, focusMac ? 1 : 5);
+      if (focusMac) {
+        const res = await fetch('/api/rssi-history?mac=' + encodeURIComponent(focusMac));
+        const data = await res.json();
+        const pts = data[focusMac] || [];
+        if (pts.length) series = [{ mac: focusMac, name: pts[0]?.name || focusMac, points: pts }];
+      }
+      const ctx = document.getElementById('rssi-chart');
+      const hint = document.getElementById('chart-hint');
+      if (!series.length || !series.some(s => s.points?.length > 1)) {
+        if (rssiChart) { rssiChart.destroy(); rssiChart = null; }
+        hint.textContent = 'AWAITING SWEEP DATA (≥2 CYCLES)…';
+        return;
+      }
+      const datasets = series.map((s, i) => ({
+        label: (s.name || s.mac).slice(0, 24),
+        data: s.points.map(p => ({ x: p.seq ?? 0, y: p.rssi, ts: p.ts })),
+        borderColor: c.lines[i % c.lines.length],
+        backgroundColor: c.lines[i % c.lines.length] + '44',
+        tension: 0.3,
+        pointRadius: 3,
+        pointHoverRadius: 5,
+        borderWidth: 2,
+        spanGaps: true,
+        fill: false,
+      }));
+      if (rssiChart) rssiChart.destroy();
+      rssiChart = new Chart(ctx, {
+        type: 'line',
+        data: { datasets },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          parsing: false,
+          interaction: { mode: 'nearest', intersect: false },
+          scales: {
+            x: {
+              type: 'linear',
+              title: { display: true, text: 'SWEEP #', color: c.text },
+              ticks: { color: c.text, maxTicksLimit: 8 },
+              grid: { color: c.grid },
+            },
+            y: {
+              title: { display: true, text: 'dBm', color: c.text },
+              ticks: { color: c.text },
+              grid: { color: c.grid },
+              suggestedMax: -30,
+              suggestedMin: -95,
+            },
+          },
+          plugins: {
+            legend: {
+              display: series.length <= 6,
+              labels: { color: c.text, boxWidth: 10, font: { size: 10 } },
+            },
+            tooltip: {
+              callbacks: {
+                title: (items) => {
+                  const ts = items[0]?.raw?.ts;
+                  return ts ? new Date(ts * 1000).toLocaleString() : 'Scan';
+                },
+              },
+            },
+          },
+        },
+      });
+      hint.textContent = focusMac
+        ? `LOCKED: ${series[0]?.name || focusMac}`
+        : `TOP ${series.length} SIG · X = SWEEP #`;
+    }
+
+    function applySnapshot(data) {
+      lastSnapshot = data;
+      const st = data.stats || {};
+      const online = data.online || [];
+      document.getElementById('stat-online').textContent = st.online ?? online.length;
+      document.getElementById('stat-spam').textContent = st.spam_packets ?? 0;
+      document.getElementById('stat-archive').textContent = '$' + (st.archive_est_usd ?? 0);
+
+      const strongest = online.reduce((best, f) => {
+        const n = f.rssi_num ?? parseRssiNum(f.rssi);
+        if (n == null) return best;
+        if (!best || n > best.rssi) return { name: f.name, rssi: n };
+        return best;
+      }, null);
+      document.getElementById('stat-live-sub').textContent = strongest
+        ? `PEAK SIG ${strongest.name} · ${strongest.rssi} dBm`
+        : (online.length ? `${online.length} TRACKED` : 'AO CLEAR');
+      document.getElementById('stat-ble-sub').textContent =
+        (st.ble_devices ?? 0) ? `${st.ble_devices} CONTACTS` : 'NO CONTACTS';
+      document.getElementById('stat-spam-sub').textContent =
+        (st.spam_packets ?? 0) ? 'THREAT PRESENT' : 'CLEAR';
+      document.getElementById('stat-archive-sub').textContent =
+        `${(st.offline ?? 0) + (st.online ?? 0)} ON FILE`;
+
+      const allBle = data.ble_devices_all || data.ble_devices || [];
+      if (snapshotBoot) {
+        prevScanHostiles = new Set(collectHostiles(data).keys());
+        snapshotBoot = false;
+      } else {
+        const freshHostiles = hostilesEnteredScan(data);
+        if (freshHostiles.length) alertHostiles(freshHostiles, 'scan');
+      }
+      const hostilesInScan = allBle.filter(d => d.is_flipper);
+      const alertEl = document.getElementById('hostile-alert');
+      if (hostilesInScan.length) {
+        if (!alertEl.classList.contains('hostile-active')) {
+          alertEl.textContent = `⚠ ${hostilesInScan.length} FLIPPER IN SPECTRUM`;
+          alertEl.classList.remove('hidden');
+        }
+      } else if (!alertEl.classList.contains('hostile-active')) {
+        alertEl.classList.add('hidden');
+      }
+
+      lastRssiDeltas = computeRssiDeltas(allBle);
+      renderHero(online, lastRssiDeltas);
+      document.getElementById('badge-platform').textContent = data.platform || '—';
+      const seq = data.scan?.seq;
+      document.getElementById('footer-ts').textContent =
+        `SWEEP ${seq ?? '—'} · ${new Date((data.ts || 0) * 1000).toLocaleString()}`;
+
+      const scanBadge = document.getElementById('badge-scan');
+      if (data.scanning) {
+        scanBadge.textContent = 'SWEEP ACTIVE';
+        scanBadge.className = 'tac-badge wof-accent animate-pulse';
+      } else if (data.ratelimited) {
+        scanBadge.textContent = 'RATELIMIT';
+        scanBadge.className = 'tac-badge';
+        scanBadge.style.color = 'var(--wof-alert)';
+      } else {
+        scanBadge.textContent = 'PASSIVE';
+        scanBadge.className = 'tac-badge wof-muted';
+      }
+
+      const banner = document.getElementById('alert-banner');
+      if (data.scan?.message) {
+        banner.textContent = data.scan.message;
+        banner.classList.remove('hidden');
+      } else banner.classList.add('hidden');
+
+      renderBleTable();
+      drawRadar(allBle);
+      renderTable('table-online', online, null, r => [
+        r.name,
+        fmtMac(r.mac),
+        `<span class="${trustClass(r.trust)}">${r.trust}</span>`,
+        `${fmtRssi(r.rssi)} ${rssiDeltaHtml(r.mac_raw || r.mac, lastRssiDeltas[r.mac_raw || r.mac])}`,
+        fmtAgo(r.last_seen_ago_sec),
+      ]);
+      updateSpamFilterOptions(data.spam_types);
+      renderSpam(data.spam || []);
+
+      const wofList = document.getElementById('list-wof');
+      const emptyWof = document.getElementById('empty-wof');
+      wofList.innerHTML = '';
+      if (!(data.nearby_wof || []).length) emptyWof.classList.remove('hidden');
+      else {
+        emptyWof.classList.add('hidden');
+        data.nearby_wof.forEach(n => { const li = document.createElement('li'); li.textContent = n; wofList.appendChild(li); });
+      }
+
+      drawRssiChart(selectedMac);
+    }
+
+    const seenEvents = new Set();
+
+    function formatEvent(ev) {
+      if (ev.event === 'flipper_seen') {
+        const tag = ev.new ? 'NEW CONTACT' : 'REACQ';
+        return `${tag} · ${ev.name || '?'} · ${ev.mac || ''} · TRUST ${ev.trust || '?'}`;
+      }
+      if (ev.event === 'ratelimit') return `ALERT RATELIMIT · T+${ev.seconds || '?'}s`;
+      if (ev.event === 'scan_error') return `SWEEP FAIL · ${ev.error || 'error'}`;
+      if (ev.event === 'worker_started') return `OPS START · HCI ${ev.hci ?? '?'}`;
+      if (ev.event === 'scan_loop_started') return 'SWEEP LOOP ONLINE';
+      return (ev.event || 'event').toUpperCase().replace(/_/g, ' ');
+    }
+
+    function pushLog(ev) {
+      const key = `${ev.event}-${ev.mac || ''}-${ev.name || ''}-${Math.floor((ev.ts || 0) / 10)}`;
+      if (ev.event === 'flipper_seen' && seenEvents.has(key)) return;
+      seenEvents.add(key);
+      if (ev.event === 'flipper_seen' && shouldBeepForMac(ev.mac)) {
+        alertHostiles([{ name: ev.name, mac: ev.mac, mac_raw: ev.mac, is_flipper: true }], 'comms');
+      }
+      const ul = document.getElementById('event-log');
+      const li = document.createElement('li');
+      li.className = 'py-0.5 border-b border-transparent';
+      li.style.borderColor = 'var(--wof-border)';
+      li.textContent = `[${new Date((ev.ts||0)*1000).toLocaleTimeString()}] ${formatEvent(ev)}`;
+      ul.prepend(li);
+      while (ul.children.length > 25) ul.removeChild(ul.lastChild);
+    }
+
+    function connectSSE() {
+      const es = new EventSource('/api/stream');
+      const badge = document.getElementById('badge-sse');
+      es.onopen = () => { badge.textContent = 'LINK UP'; badge.className = 'tac-badge wof-accent'; };
+      es.onmessage = e => { try { applySnapshot(JSON.parse(e.data)); } catch (_) {} };
+      es.addEventListener('log', e => { try { pushLog(JSON.parse(e.data)); } catch (_) {} });
+      es.onerror = () => {
+        badge.textContent = 'LINK DOWN';
+        badge.className = 'tac-badge wof-muted';
+        es.close();
+        setTimeout(connectSSE, 3000);
+      };
+    }
+
+    let radarResizeTimer;
+    window.addEventListener('resize', () => {
+      clearTimeout(radarResizeTimer);
+      radarResizeTimer = setTimeout(() => {
+        const all = lastSnapshot.ble_devices_all || lastSnapshot.ble_devices || [];
+        drawRadar(all);
+      }, 120);
+    });
+
+    themeInit();
+    fetch('/api/snapshot').then(r => r.json()).then(d => {
+      applySnapshot(d);
+      setTimeout(() => drawRadar(d.ble_devices_all || d.ble_devices || []), 50);
+    });
+    connectSSE();
+  </script>
+</body>
+</html>

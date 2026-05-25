@@ -1,136 +1,125 @@
 #!/usr/bin/python3
 
-#                               YAao,                            
-#                                 Y8888b,                        Created By: Kiyomi & Jbohack
-#                               ,oA8888888b,                     Kiyomi: https://ko-fi.com/k3yomi
-#                         ,aaad8888888888888888bo,               Jbohack: https://ko-fi.com/jbohack
-#                      ,d888888888888888888888888888b,               
-#                    ,888888888888888888888888888888888b,            
-#                   d8888888888888888888888888888888888888,                   
-#                  d888888888888888888888888888888888888888b             
-#                 d888888P'                    `Y88888888Ꙩ \,          
-#                 88888P'                    Ybaaaa888888  Ꙩ l          
-#                a8888'                      `Y8888P' `V888888    
-#              d8888888a                                `Y8888           
-#             AY/'' `\Y8b                                 ``Y8b
-#             Y'      `YP                                    ~~
-#     _       __      ____         ____   _________                           
-#    | |     / /___ _/ / /  ____  / __/  / ____/ (_)___  ____  ___  __________
-#    | | /| / / __ `/ / /  / __ \/ /_   / /_  / / / __ \/ __ \/ _ \/ ___/ ___/
-#    | |/ |/ / /_/ / / /  / /_/ / __/  / __/ / / / /_/ / /_/ /  __/ /  (__  )
-#    |__/|__/\__,_/_/_/   \____/_/    /_/   /_/_/ .___/ .___/\___/_/  /____/
-#                                              /_/   /_/
-
-# Standard library Imports
-import platform
 import sys
 import time
-import asyncio
 import threading
 
+import utils.wof_cache as cache
+import utils.wof_library as library
+import utils.wof_scanner as wof_scanner
 
-# Wall of Flippers "library" for important functions and classes :3
-import utils.wof_cache as cache # Wall of Flippers "cache" for important configurations and data :3
-import utils.wof_library as library # Wall of Flippers "library" for important functions and classes :3
 
-def chect2Limit(string:str, limit:int):
+def check_length(string, limit):
     if len(string) > limit:
-        print(f"[!] Wall of Flippers >> {string} is too long! Please enter a name with {limit} characters or less.")
+        print(f"[!] Wall of Flippers >> Message too long (max {limit} characters).")
         return False
     return True
 
-def send_traffic(sock:int, start:object, stop:object):
-    try: 
-        displayName = cache.wof_data['wof_displayName'] + "::" # :: = Splitter
-        totalCharsLeft = 31 - len(displayName) - len(cache.wof_data['wof_bleAdvertiserRaw'])
-        global customMessage
-        library.print_ascii_art("You are now broadcasting your messages!")
-        for i in cache.wof_data['cachedMessages'][:20]:
-            readable_date = time.strftime('%H:%M:%S', time.localtime(i['time']))
-            print(f"[+] {readable_date} {i['displayName']} >> {i['message']}")
-        customMessage = input(f"[?] Wall of Flippers >> (MAX: {totalCharsLeft} chars) (Empty = Refresh) >> ")
-        if (customMessage == ""): send_traffic(sock, start, stop)
-        isStringAllowed = chect2Limit(customMessage, totalCharsLeft)
-        if (not isStringAllowed): library.print_ascii_art(f"Message is too long! Please enter a message with less than {totalCharsLeft} characters."); send_traffic(sock, start, stop)
-        cache.wof_data['cachedMessages'].append({"displayName": cache.wof_data['wof_displayName'], "message": customMessage, "time": int(time.time())})
-        for i in range(0, 10):
-            advertisementData = cache.wof_data['wof_blechatAdvertiser']
-            advertisementData = list(advertisementData)
-            advertisementData += list(bytes.fromhex(displayName.encode().hex())) 
-            advertisementData += list(bytes.fromhex(customMessage.encode().hex()))
-            advertisementData = tuple(advertisementData)
-            advertisementData += (0x00,) * (31 - len(advertisementData))
-            to_hex = lambda data: ''.join(f"{i:02x}" for i in advertisementData)
-            start(sock, adv_type=0x03, data=advertisementData)
-            time.sleep(0.1)
-            stop(sock)     
-        send_traffic(sock, start, stop) 
-    except KeyboardInterrupt:
-        library.print_ascii_art("Thank you for using Wall of Flippers... Goodbye!")
-        print("\n[!] Wall of Flippers >> Exiting...")
-        stop(sock)
-        sys.exit()
+
+def send_traffic(sock, start, stop):
+    from utils.bluetooth_utils import stop_le_advertising
+
+    display_name = cache.wof_data['wof_displayName'] + "::"
+    total_chars_left = 31 - len(display_name) - len(cache.wof_data['wof_bleAdvertiserRaw'])
+
+    while True:
+        try:
+            library.print_ascii_art("You are now broadcasting your messages!")
+            for entry in cache.wof_data['cachedMessages'][:20]:
+                readable_date = time.strftime('%H:%M:%S', time.localtime(entry['time']))
+                print(f"[+] {readable_date} {entry['displayName']} >> {entry['message']}")
+
+            custom_message = input(
+                f"[?] Wall of Flippers >> (MAX: {total_chars_left} chars) (Empty = Refresh) >> "
+            )
+            if custom_message == "":
+                continue
+            if not check_length(custom_message, total_chars_left):
+                continue
+
+            cache.wof_data['cachedMessages'].append({
+                "displayName": cache.wof_data['wof_displayName'],
+                "message": custom_message,
+                "time": int(time.time()),
+            })
+
+            for _ in range(0, 10):
+                advertisement_data = list(cache.wof_data['wof_blechatAdvertiser'])
+                advertisement_data += list(bytes.fromhex(display_name.encode().hex()))
+                advertisement_data += list(bytes.fromhex(custom_message.encode().hex()))
+                advertisement_data = tuple(advertisement_data)
+                advertisement_data += (0x00,) * (31 - len(advertisement_data))
+                start(sock, adv_type=0x03, data=advertisement_data)
+                time.sleep(0.1)
+                stop(sock)
+        except KeyboardInterrupt:
+            library.print_ascii_art("Thank you for using Wall of Flippers... Goodbye!")
+            print("\n[!] Wall of Flippers >> Exiting...")
+            stop_le_advertising(sock)
+            sys.exit(0)
 
 
-def sort_traffic(ble_packets:list):
+def sort_traffic(ble_packets):
     for advertisement in ble_packets:
-        advertisement_packets = advertisement['PCK']
+        advertisement_packets = advertisement[0]['packets']
         for advertisement_packet in advertisement_packets:
             if str(advertisement_packet).startswith(cache.wof_data['wof_bleAdvertiserRaw']):
-                decodedMessage = bytes.fromhex(advertisement_packet.replace(cache.wof_data['wof_bleAdvertiserRaw'], "")).decode('utf-8').replace("\x00", "")
-                decodedDisplayName = decodedMessage.split("::")[0]
-                decodedDisplayMessage = decodedMessage.split("::")[1]
-                # check for duplicates
-                if any(i['message'] == decodedDisplayMessage for i in cache.wof_data['cachedMessages']) and any(i['displayName'] == decodedDisplayName for i in cache.wof_data['cachedMessages']):
+                decoded_message = bytes.fromhex(
+                    advertisement_packet.replace(cache.wof_data['wof_bleAdvertiserRaw'], "")
+                ).decode('utf-8', errors='ignore').replace("\x00", "")
+                if "::" not in decoded_message:
                     continue
-                cache.wof_data['cachedMessages'].append({"displayName": decodedDisplayName, "message": decodedDisplayMessage, "time": int(time.time())})
-async def read_traffic(sock:int, Scanner:object):
+                decoded_display_name = decoded_message.split("::")[0]
+                decoded_display_message = decoded_message.split("::", 1)[1]
+                duplicate = any(
+                    i['message'] == decoded_display_message and i['displayName'] == decoded_display_name
+                    for i in cache.wof_data['cachedMessages']
+                )
+                if duplicate:
+                    continue
+                cache.wof_data['cachedMessages'].append({
+                    "displayName": decoded_display_name,
+                    "message": decoded_display_message,
+                    "time": int(time.time()),
+                })
+
+
+def read_traffic(hci_device):
     cache.wof_data['bool_isScanning'] = True
-    ble_packets = []
-    scanner = Scanner(sock) # Thank you Talking Sasquach for testing this!
-    devices = scanner.scan(5) # Scan the area for 5 seconds....
-    if devices:
-        for device in devices:
-            scan_list = device.getScanData()
-            device_packets = []
-            device_formatted = []
-            for scan_list_item in scan_list:
-                device_formatted.append({"ADTYPE": scan_list_item[0], "Description": scan_list_item[1], "Value": scan_list_item[2]})
-            for i_data in device_formatted:
-                device_packets.append(i_data['Value'])
-            ble_packets.append({"PCK": device_packets})
-    sort_traffic(ble_packets)
-    cache.wof_data['bool_isScanning'] = False
+    try:
+        ble_packets = wof_scanner.scan_ble(cache.wof_data['platform_kind'], hci_device)
+        sort_traffic(ble_packets)
+    finally:
+        cache.wof_data['bool_isScanning'] = False
 
 
 def init():
-    try: 
-        from utils.bluetooth_utils import toggle_device, start_le_advertising, stop_le_advertising
-        import bluetooth._bluetooth as bluez
-        from bluepy.btle import Scanner
-    except ImportError as e:
-        library.print_ascii_art("Error: Failed to import dependencies")
-        print(f"[!] Wall of Flippers >> Failed to import dependencies >> {e}")
-        sys.exit()
-    except KeyboardInterrupt:
-        library.print_ascii_art("Thank you for using Wall of Flippers... Goodbye!")
-        print("\n[!] Wall of Flippers >> Exiting...")
-        sys.exit()
-    DEVIC_HCI = library.adapter2Selection()
-    sock = bluez.hci_open_dev(int(DEVIC_HCI))
-    toggle_device(int(DEVIC_HCI), True)
-    displayNameSelection = input("[?] Wall of Flippers >> Please enter your display name (MAX: 6 chars) >> ")
-    isStringAllowed = chect2Limit(displayNameSelection, 6)
-    if (not isStringAllowed): sys.exit()
-    cache.wof_data['wof_displayName'] = displayNameSelection
+    from utils.bluetooth_utils import toggle_device, start_le_advertising, stop_le_advertising
+    import bluetooth._bluetooth as bluez
+
+    hci_device = library.adapter2Selection()
+    hci_index = library.normalize_hci(hci_device)
+    sock = bluez.hci_open_dev(hci_index)
+    toggle_device(hci_index, True)
+
+    display_name_selection = input("[?] Wall of Flippers >> Display name (MAX: 6 chars) >> ")
+    if not check_length(display_name_selection, 6):
+        sys.exit(1)
+    cache.wof_data['wof_displayName'] = display_name_selection
+
+    threading.Thread(
+        target=send_traffic,
+        args=(sock, start_le_advertising, stop_le_advertising),
+        daemon=True,
+    ).start()
+
     try:
-        threading.Thread(target=send_traffic, args=(sock, start_le_advertising, stop_le_advertising)).start()
         while True:
             time.sleep(0.1)
             if not cache.wof_data['bool_isScanning']:
-                asyncio.run(read_traffic(DEVIC_HCI, Scanner))
+                read_traffic(hci_device)
     except KeyboardInterrupt:
         library.print_ascii_art("Thank you for using Wall of Flippers... Goodbye!")
         print("\n[!] Wall of Flippers >> Exiting...")
         stop_le_advertising(sock)
-        sys.exit()
+        sys.exit(0)

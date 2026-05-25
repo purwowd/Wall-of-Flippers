@@ -1,4 +1,9 @@
 .venv
+venv
 __pycache__
+.pytest_cache
 db/Flipper.json
 db/Backup.json
+db/.disclaimer_seen
+logs/
+*.tmp
